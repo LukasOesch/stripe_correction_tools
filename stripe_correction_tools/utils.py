@@ -88,13 +88,18 @@ def find_buffer_indices(frame, reference, min_std = 5):
     candidate_positions = [[],[]]
     thresh = np.std(np.diff(reference)) * min_std
     for row in range(1, frame.shape[0]-1):
-        for column in range(1, frame.shape[1]-1):
-            right = np.abs(frame[row,column] - frame[row,column+1])
-            down = np.abs(frame[row,column] - frame[row+1,column])
-            left = np.abs(frame[row,column] - frame[row,column-1])
-            up = np.abs(frame[row,column] - frame[row-1,column])
-       
-            if ((right > thresh) & (down > thresh)) & ((left <= thresh) & (up <= thresh)):
+        for column in range(1, frame.shape[1]-2):
+            fwd_bwd = np.array([False, False]) #Check for jumpps in a forward and backward mode
+            for k in [0,1]:
+                right = np.abs(frame[row, column + k] - frame[row,column + k +1])
+                down = np.abs(frame[row, column + k] - frame[row+1,column + k])
+                left = np.abs(frame[row, column + k] - frame[row,column + k -1])
+                up = np.abs(frame[row, column + k] - frame[row-1,column + k])
+                if k == 0: #Forward case
+                    fwd_bwd[k] = ((right > thresh) & (down > thresh)) & ((left <= thresh) & (up <= thresh))
+                elif k == 1: #Backward case
+                    fwd_bwd[k] = ((left > thresh) & (up > thresh)) & ((right <= thresh) & (down <= thresh))
+            if np.sum(fwd_bwd) > 0:
                 candidate_positions[0].append(row)
                 candidate_positions[1].append(column)
         
@@ -144,47 +149,54 @@ def find_buffer_indices(frame, reference, min_std = 5):
     for k in range(len(stripe_indices)):
         twentyseven_liner = np.where(np.diff(stripe_indices[k][:,0]) == 27)[0]
         column_shift = mode(np.diff(stripe_indices[k][:,1])[twentyseven_liner])[0] #take the most frequent value, there might be some weird outliers...
-        assert (column_shift < 0) & (column_shift % 8 == 0), "Column shift is either positive or not divisible by 8"
+        if np.isnan(column_shift): #Check if we hit a 26 line instance
+            #If the only instance of consecutive jumps happens to be a 26 line one
+            #we have to calculate the expected line shift differently
+            twentysix_liner = np.where(np.diff(stripe_indices[k][:,0]) == 26)[0]
+            column_shift = mode(np.diff(stripe_indices[k][:,1])[twentysix_liner] - 600 - 8)[0]
+            
+        if (column_shift < 0) & (column_shift % 8 == 0):
         
-        #Start the reconstruction
-        full_stripe_indices[k][0,:] = stripe_indices[k][0,:] #Initialize
-        
-        #Backward direction: if we are missing stripe transitions before
-        if stripe_indices[k][0,0] > 27: #In this case we should be missing buffer transitions earlier
-            loops = np.floor(stripe_indices[k][0,0] / ((600 * 27 + column_shift)/600)).astype(int) #Take into account that the pattern repeats at a little less than 27 lines...
-            for lo in range(loops):
-                if full_stripe_indices[k][0,1] - column_shift < 600:
-                    full_stripe_indices[k] = np.vstack((np.array([full_stripe_indices[k][0,0]-27, full_stripe_indices[k][0,1] - column_shift]), full_stripe_indices[k]))
-                elif full_stripe_indices[k][0,1] - column_shift >= 600:
-                    full_stripe_indices[k] = np.vstack((np.array([full_stripe_indices[k][0,0]-26, full_stripe_indices[k][0,1] - column_shift - 600 - 8]), full_stripe_indices[k]))
-        
-        #Forward direction: all the missing transitions after the first detected one
-        for n in range(1, stripe_indices[k].shape[0]):
-            #First, if the expected line has been found
-            if ((stripe_indices[k][n,0] - stripe_indices[k][n-1,0] == 27) & (stripe_indices[k][n-1,1] + column_shift >= 0)) or \
-                ((stripe_indices[k][n,0] - stripe_indices[k][n-1,0] == 26) & (stripe_indices[k][n-1,1] + column_shift < 0)):
+            #Start the reconstruction
+            full_stripe_indices[k][0,:] = stripe_indices[k][0,:] #Initialize
+            
+            #Backward direction: if we are missing stripe transitions before
+            if stripe_indices[k][0,0] > 27: #In this case we should be missing buffer transitions earlier
+                loops = np.floor(stripe_indices[k][0,0] / ((600 * 27 + column_shift)/600)).astype(int) #Take into account that the pattern repeats at a little less than 27 lines...
+                for lo in range(loops):
+                    if full_stripe_indices[k][0,1] - column_shift < 600:
+                        full_stripe_indices[k] = np.vstack((np.array([full_stripe_indices[k][0,0]-27, full_stripe_indices[k][0,1] - column_shift]), full_stripe_indices[k]))
+                    elif full_stripe_indices[k][0,1] - column_shift >= 600:
+                        full_stripe_indices[k] = np.vstack((np.array([full_stripe_indices[k][0,0]-26, full_stripe_indices[k][0,1] - column_shift - 600 - 8]), full_stripe_indices[k]))
+            
+            #Forward direction: all the missing transitions after the first detected one
+            for n in range(1, stripe_indices[k].shape[0]):
+                #First, if the expected line has been found
+                if ((stripe_indices[k][n,0] - stripe_indices[k][n-1,0] == 27) & (stripe_indices[k][n-1,1] + column_shift >= 0)) or \
+                    ((stripe_indices[k][n,0] - stripe_indices[k][n-1,0] == 26) & (stripe_indices[k][n-1,1] + column_shift < 0)):
+                        full_stripe_indices[k] = np.vstack((full_stripe_indices[k], stripe_indices[k][n,:]))
+                else: #When we are missing a position marker
+                    loops = np.round((stripe_indices[k][n,0] - stripe_indices[k][n-1,0]) / ((600 * 27 + column_shift)/600)).astype(int) -1
+                    #Take into account that the pattern repeats at a little less than 27 lines and that we have the next timepoint
+                    for lo in range(loops):
+                        if full_stripe_indices[k][-1,1] + column_shift >= 0:
+                            full_stripe_indices[k] = np.vstack((full_stripe_indices[k], np.array([full_stripe_indices[k][-1,0] + 27, full_stripe_indices[k][-1,1] + column_shift])))
+                        elif full_stripe_indices[k][-1,1] + column_shift < 0:
+                            full_stripe_indices[k] = np.vstack((full_stripe_indices[k], np.array([full_stripe_indices[k][-1,0] + 26, 600 + full_stripe_indices[k][-1,1] + column_shift + 8])))
+                    
+                    #Finally add the current position after having accounted for the missing ones
                     full_stripe_indices[k] = np.vstack((full_stripe_indices[k], stripe_indices[k][n,:]))
-            else: #When we are missing a position marker
-                loops = np.round((stripe_indices[k][n,0] - stripe_indices[k][n-1,0]) / ((600 * 27 + column_shift)/600)).astype(int) -1
-                #Take into account that the pattern repeats at a little less than 27 lines and that we have the next timepoint
+            
+            #Now check if we are missing some positions at the end
+            if full_stripe_indices[k][-1,0] + 27 < 600:
+                loops = np.floor((600 - full_stripe_indices[k][-1,0]) / ((600 * 27 + column_shift)/600)).astype(int) #Take into account that the pattern repeats at a little less than 27 lines...
                 for lo in range(loops):
                     if full_stripe_indices[k][-1,1] + column_shift >= 0:
                         full_stripe_indices[k] = np.vstack((full_stripe_indices[k], np.array([full_stripe_indices[k][-1,0] + 27, full_stripe_indices[k][-1,1] + column_shift])))
                     elif full_stripe_indices[k][-1,1] + column_shift < 0:
                         full_stripe_indices[k] = np.vstack((full_stripe_indices[k], np.array([full_stripe_indices[k][-1,0] + 26, 600 + full_stripe_indices[k][-1,1] + column_shift + 8])))
-                
-                #Finally add the current position after having accounted for the missing ones
-                full_stripe_indices[k] = np.vstack((full_stripe_indices[k], stripe_indices[k][n,:]))
-        
-        #Now check if we are missing some positions at the end
-        if full_stripe_indices[k][-1,0] + 27 < 600:
-            loops = np.floor((600 - full_stripe_indices[k][-1,0]) / ((600 * 27 + column_shift)/600)).astype(int) #Take into account that the pattern repeats at a little less than 27 lines...
-            for lo in range(loops):
-                if full_stripe_indices[k][-1,1] + column_shift >= 0:
-                    full_stripe_indices[k] = np.vstack((full_stripe_indices[k], np.array([full_stripe_indices[k][-1,0] + 27, full_stripe_indices[k][-1,1] + column_shift])))
-                elif full_stripe_indices[k][-1,1] + column_shift < 0:
-                    full_stripe_indices[k] = np.vstack((full_stripe_indices[k], np.array([full_stripe_indices[k][-1,0] + 26, 600 + full_stripe_indices[k][-1,1] + column_shift + 8])))
-            
+        else:
+            print('Encountered a column shift that was either positive or not divisible by 8. Ingored this stripe.')
     #Make sure to exclude one kind of stripe if it basically captures the same
     #lines as an already existing one. Take the one with more detected transitions
     is_duplicate = []
@@ -194,7 +206,7 @@ def find_buffer_indices(frame, reference, min_std = 5):
             tmp = [0]
             ind.append(np.array([k,n]))
             for q in range(full_stripe_indices[k].shape[0]):
-                if full_stripe_indices[k][q,0] in full_stripe_indices[n][:,0]:
+                if np.sum((np.array(full_stripe_indices[k][q,:]) == np.array(full_stripe_indices[n])).all(-1)) > 0: #Check if the exact same coordinates have been detected for another candidate stripe
                     tmp.append(1)
             is_duplicate.append(np.sum(tmp))
     ind = np.vstack(ind)
@@ -254,6 +266,8 @@ def shift_stripes(frame, reference, full_stripe_indices, buffers):
     Outputs
     -------
     reconstructed_frame: array, the corrected frame
+    correction_quality: float, the correlation between the reference and the
+                        corrected frame
     ---------------------------------------------------------------------------
     '''
     
@@ -311,4 +325,5 @@ def shift_stripes(frame, reference, full_stripe_indices, buffers):
     
 
     reconstructed_frame = np.reshape(stripe_im, [600, 600])
-    return reconstructed_frame
+    correction_quality = np.corrcoef(stripe_im, ref_im)[0,1]
+    return reconstructed_frame, correction_quality

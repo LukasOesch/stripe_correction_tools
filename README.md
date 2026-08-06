@@ -23,6 +23,9 @@ Typically, frames with different kinds of artifacts that don't show the strong p
 
 <img width="1920" height="1440" alt="Non-periodic_artifact" src="https://github.com/user-attachments/assets/a4da8057-d5e1-4e77-a84f-9a2be6af9555" />
 
+## Usage
+The utils contain functions to detect striped frames ('are_stripes_present'), find the borders of the stripes ('find_buffer_indices') and correct the frame ('shift_stripes').
+A simple use case would be to first run through the entire video to find the indices of the compromised frames and use these indices to identify the closest intact frames as reference. Once the compromised frames and their corresponding reference frame have been found one can simply run 'find_buffer_indices' and 'shift_stripes' on these. 
 
 ## Limitations
 While the functions introduced here can dramatically improve the quality of corrupted frames they cannot completely restore the original image. Better to prevent these stripes than to fix them! Make sure to test the integrity of the coax cable and and to replace it if necessary. Consider externally powering the DAQ using a 6V input to minimize power fluctuations.

@@ -25,7 +25,7 @@ Typically, frames with different kinds of artifacts that don't show the strong p
 
 
 ## Limitations
-While the functions introduced here can dramatically improve the quality of corrupted frames the cannot completely restore the original image. Better to prevent these stripes than to fix them! Make sure to test the integrity of the coax cable and and to replace it if necessary. Consider externally powering the DAQ using a 6V input to minimize power fluctuations.
+While the functions introduced here can dramatically improve the quality of corrupted frames they cannot completely restore the original image. Better to prevent these stripes than to fix them! Make sure to test the integrity of the coax cable and and to replace it if necessary. Consider externally powering the DAQ using a 6V input to minimize power fluctuations.
 
 ## Installation
 Simply clone the repo. Add this repo to you current python path via sys and import the desired functions.

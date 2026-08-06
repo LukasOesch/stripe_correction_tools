@@ -6,7 +6,7 @@ Created on Tue Aug  4 13:15:39 2026
 @author: loesch
 """
 
-def are_stripes_present(frame, reference, min_std = 8, min_stripe_num = 10, density_threshold = 0.15):
+def are_stripes_present(frame, reference, min_std = 8, min_stripe_num = 40, density_threshold = 0.15):
     '''Check whether a frame has the striping pattern
     
     Inputs
@@ -17,6 +17,8 @@ def are_stripes_present(frame, reference, min_std = 8, min_stripe_num = 10, dens
     min_std: int, threshold for detection of border between stripes, in units of
              standard deviations of the diff from the reference image
     min_stripe_num: int, minimum number of stripes that need to be present
+    density_threshold: float, the minimum power spectral density for the 22 Hz
+                       (27 lines) bin.
     
     Outputs
     -------
@@ -27,20 +29,22 @@ def are_stripes_present(frame, reference, min_std = 8, min_stripe_num = 10, dens
     import numpy as np
     from scipy.signal import welch, find_peaks
     
-    # #Compute diffs of the images
-    # reg_diff = np.diff(np.mean(reference,axis=1))
-    # str_diff = np.diff(np.mean(frame,axis=1))
+    #In a first step, check whether we a mimimum number of jumps in the averages
+    #between rows
+    reg_diff = np.diff(np.mean(reference,axis=1))
+    str_diff = np.diff(np.mean(frame,axis=1))
     
-    # thresh = min_std * np.std(np.abs(reg_diff))
-    # stripes_present = np.sum(np.abs(str_diff) > thresh) > min_stripe_num # More than five simultaneous jumps
+    thresh = min_std * np.std(np.abs(reg_diff))
+    jumps_present = np.sum(np.abs(str_diff) > thresh) > min_stripe_num # More than five simultaneous jumps
     
+    #Second, check whether the periodicity of the jumps is between 22 and 23 Hz (26 - 27 lines)
     frequencies, psd_values = welch(np.mean(frame,axis=1) - np.mean(reference,axis=1), fs = 600, nfft = 600)
     # peak_freq = frequencies[np.argmax(psd_values)] #Found frequency marks the bottom of the 1 Hz frequency bin
     # stripes_present = (peak_freq == 22) & (psd_values[int(peak_freq)] >= 0.1) 
     #This is because 600/27 = 22.22 -> pattern has to repeat after 27ish lines
     
     peaks, _ = find_peaks(psd_values, distance = 10)
-    stripes_present = ((22 in peaks) or (23 in peaks)) & (psd_values[22] > density_threshold) & (frequencies[np.argmax(psd_values)] > 20)
+    stripes_present = ((22 in peaks) or (23 in peaks)) & (psd_values[22] > density_threshold) & jumps_present
     
     return stripes_present
 

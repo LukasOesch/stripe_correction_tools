@@ -1,10 +1,11 @@
 from labdata.schema import *
 import labdata
 import labdata.rules
+from .utils import *
 
 schema = get_user_schema()
-
 @schema
+#@get_user_schema()
 class MiniscopeStripeCorrection(dj.Computed):
     definition = '''
     -> Miniscope
@@ -19,6 +20,8 @@ class MiniscopeStripeCorrection(dj.Computed):
         Method to run through the image stack and find frames that show a pattern
         of repeating horizontal stripes.
         '''
+        from tqdm import tqdm
+        
         stack = (Miniscope & key).open()
         reference = stack[0,:,:] #We use the first frame of the recording as a
         #static reference for the detection. We can do this because we are 
@@ -47,6 +50,7 @@ class MiniscopeStripeCorrection(dj.Computed):
         
     def correct(self,key):
         '''Run the correction on the identified frames'''
+        from tqdm import tqdm
         
         if self.stripe_frame_idx.shape[0] > 0:
             stack = (Miniscope & key).open()
@@ -112,17 +116,15 @@ class MiniscopeStripeCorrection(dj.Computed):
         else:
             checksums = labdata.compute_md5s([previous_filepath], n_jobs=8, show_progress=False, suppress_file_not_found=False)
         
-        stripe_corr = {'num_frames_corrected': num_frames_corrected, 'changed_frame_indices': changed_frame_indices, 'previous_checksum': checksums[0]}
+        stripe_corr = {'num_frames_changed': num_frames_changed, 'changed_frame_indices': changed_frame_indices, 'previous_checksum': checksums[0]}
         
-        self.insert1(key,**stripe_corr) #Here the key is still the animal id, session, etc. key
+        #Build the dict to insert
+        tmp = key.fetch1() #Here the key is still the animal id, session, etc. key, to get a dict of it we have to fetch
+        primary_key_dict = {keep: tmp[keep] for keep in key.primary_key} #Construct a dict that only retains the primary keys but drops some of the miniscope specific ones that are not needed here
+        
+        self.insert1(dict(primary_key_dict,**stripe_corr)) #Add the info about corrected frames to the primary keys and insert
 
-            # if no changes insert the table and move on. If there are changes:
-            # replace the original file # danger
-            # upload the new file to AWS: not destructive, keep versions. # this part needs testing
-            # write to the table that the file was corrected
-            #Avoid uploading the new .zip.zarr
-
-
+         
 # key = ...Miniscope 1 session_name ).fetch("KEY")
 # MiniscopeStripeCorrection.populate(key)
 # #Remember that the populate method will call make, so no need to add this somewhere

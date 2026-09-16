@@ -193,7 +193,8 @@ def find_buffer_indices(frame, reference, min_std = 5):
             
             #Now check if we are missing some positions at the end
             if full_stripe_indices[k][-1,0] + 27 < 600:
-                loops = np.floor((600 - full_stripe_indices[k][-1,0]) / ((600 * 27 + column_shift)/600)).astype(int) #Take into account that the pattern repeats at a little less than 27 lines...
+                loops = np.floor((599 - full_stripe_indices[k][-1,0]) / ((600 * 27 + column_shift)/600)).astype(int) #Take into account that the pattern repeats at a little less than 27 lines...
+                #Note that we use 599 above because that reflects the true last line index rather than the number of lines
                 for lo in range(loops):
                     if full_stripe_indices[k][-1,1] + column_shift >= 0:
                         full_stripe_indices[k] = np.vstack((full_stripe_indices[k], np.array([full_stripe_indices[k][-1,0] + 27, full_stripe_indices[k][-1,1] + column_shift])))

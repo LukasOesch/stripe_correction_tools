@@ -111,7 +111,7 @@ def find_buffer_indices(frame, reference, min_std = 5):
     stripe_indices = []
     cp_copy = np.squeeze(candidate_positions).T
     
-    while (cp_copy.shape[0] > 0):
+    while (cp_copy.shape[0] > 1): #If there is only one jump left, there is nothing to match
         test_pos = cp_copy[0,0]
         expected_rows = []
         for k in range(int(((frame.shape[0] - test_pos)+27) / 27)):

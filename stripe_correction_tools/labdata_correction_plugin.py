@@ -119,8 +119,9 @@ class MiniscopeStripeCorrection(dj.Computed):
         stripe_corr = {'num_frames_changed': num_frames_changed, 'changed_frame_indices': changed_frame_indices, 'previous_checksum': checksums[0]}
         
         #Build the dict to insert
-        tmp = key.fetch1() #Here the key is still the animal id, session, etc. key, to get a dict of it we have to fetch
-        primary_key_dict = {keep: tmp[keep] for keep in key.primary_key} #Construct a dict that only retains the primary keys but drops some of the miniscope specific ones that are not needed here
+        #tmp = key.fetch1() #Here the key is still the animal id, session, etc. key, to get a dict of it we have to fetch
+        #primary_key_dict = {keep: tmp[keep] for keep in key.primary_key} #Construct a dict that only retains the primary keys but drops some of the miniscope specific ones that are not needed here
+        primary_key_dict = {'subject_name': key['subject_name'], 'session_name': key['session_name'], 'dataset_name': key['dataset_name']}
         
         self.insert1(dict(primary_key_dict,**stripe_corr)) #Add the info about corrected frames to the primary keys and insert
 

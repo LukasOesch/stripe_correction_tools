@@ -50,7 +50,7 @@ def are_stripes_present(frame, reference, min_std = 8, min_stripe_num = 40, dens
 
 #%%
 
-def find_buffer_indices(frame, reference, min_std = 5):
+def find_buffer_indices(frame, reference, min_std = 6):
     '''Find the offsets of the image buffers. These mark the borders between 
     the different stripes.
     NOTE: In the current state this function is hard-coded for full frame images
@@ -149,7 +149,7 @@ def find_buffer_indices(frame, reference, min_std = 5):
     
     #Knowing this pattern for every stripe we can reconstruct all the missing positions
     #in forward and backward direction.
-    full_stripe_indices = [np.empty([1,2]) for x in range(len(stripe_indices))] #Super ugly: create another list to add to
+    full_stripe_indices = [np.zeros([1,2])*np.nan for x in range(len(stripe_indices))] #Super ugly: create another list to add to
     for k in range(len(stripe_indices)):
         twentyseven_liner = np.where(np.diff(stripe_indices[k][:,0]) == 27)[0]
         column_shift = mode(np.diff(stripe_indices[k][:,1])[twentyseven_liner])[0] #take the most frequent value, there might be some weird outliers...
@@ -202,6 +202,10 @@ def find_buffer_indices(frame, reference, min_std = 5):
                         full_stripe_indices[k] = np.vstack((full_stripe_indices[k], np.array([full_stripe_indices[k][-1,0] + 26, 600 + full_stripe_indices[k][-1,1] + column_shift + 8])))
         else:
             print('Encountered a column shift that was either positive or not divisible by 8. Ingored this stripe.')
+    
+    #Remove the stripes that were skipped because their column back shift did not meet the criteria
+    full_stripe_indices = [x for x in full_stripe_indices if np.sum(np.isnan(x)) == 0]
+    
     #Make sure to exclude one kind of stripe if it basically captures the same
     #lines as an already existing one. Take the one with more detected transitions
     is_duplicate = []
